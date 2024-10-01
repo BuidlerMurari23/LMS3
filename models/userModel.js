@@ -59,7 +59,7 @@ userSchema.methods = {
         return await JWT.sign(
             {id: this._id, email: this.email, subscription: this.subscription, role: this.role},
             process.env.JWT_SECRET,
-            {expiresIn: process.env.JWT_EXPIRY}
+            {expiresIn: process.env.JWT_EXPIRY},
         )
     },
 

@@ -103,7 +103,31 @@ const login = async (req, res, next) => {
     } catch (e) {
         return next(new AppError(e.message, 401))
     }
+};
 
+const getUserProfile = async (req, res, next) => {
+    try {
+        const userID = req.user.id;
+
+        const user = await User.findById(userID);
+
+    res.status(200).json({
+        success: true,
+        message: "featching the user profile data",
+        user
+    })
+    } catch (e) {
+        return next(new AppError(e.message, 402))
+    }
+};
+
+const logOut = async (req, res, next) => {
+    res.cookie("token", null, cookieOption);
+
+    res.status(201).json({
+        success: true,
+        message: "you logged out successfully"
+    })
 
 }
 
@@ -111,5 +135,7 @@ const login = async (req, res, next) => {
 
 export {
     register,
-    login
+    login,
+    getUserProfile,
+    logOut
 }
