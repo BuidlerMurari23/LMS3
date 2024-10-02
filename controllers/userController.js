@@ -201,8 +201,86 @@ const resetPassword = async (req, res, next) => {
         success: true,
         message: "Password has reset successfully."
     })
+};
 
+const changePassword = async (req, res, next) => {
+    const { oldPassword, newPassword} = req.body;
+    const userID = req.user.id;
 
+    if(!oldPassword || !newPassword){
+        return next(new AppError("all fields are required", 402))
+    };
+
+    const user = await User.findById(userID).select("+password");
+
+    if(!user){
+        return next(new AppError("User doesnot exists", 402))
+    };
+
+    const isPasswordValid = await user.comparePassword(oldPassword);
+
+    if(!isPasswordValid){
+        return next(new AppError(`invalid old Password: ${oldPassword}`))
+    };
+
+    user.password = newPassword;
+    await user.save();
+
+    user.password = undefined;
+
+    res.status(200).json({
+        success: true,
+        message: "Password has changed successfully."
+    })
+};
+
+const updateProfile = async (req, res, next) => {
+        const { fullName } = req.body;
+        const userID = req.user.id;
+
+        if (!fullName){
+            return next(new AppError("Please enter your desired user name", 402))
+        };
+
+        const user = await User.findById(userID);
+
+        if(!user){
+            return next(new AppError("User doesnot exists", 402))
+        };
+
+        if(fullName){
+            user.fullName = fullName;
+        };
+
+        if(req.file){
+            try {
+               await cloudinary.v2.uploader.destroy(user.avatar.public_id);
+               const result = await cloudinary.v2.uploader.upload(req.file.path, {
+                folder: "lms",
+                height: 250,
+                width: 250,
+                gravity: "faces",
+                crop: "fill"
+               });
+               
+               if(result){
+                user.avatar.public_id = result.public_id;
+                user.avatar.secure_url = result.secure_url;
+
+                // fs helps in removing the file from local host
+                fs.rm(`uploads/${req.file.filename}`)
+               }
+            } catch (e) {
+                return next(new AppError(e.message || "file not found please try again", 403))
+            }
+        }
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully.",
+            user
+        })
 }
 
 
@@ -213,5 +291,7 @@ export {
     getUserProfile,
     logOut,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    changePassword,
+    updateProfile
 }
