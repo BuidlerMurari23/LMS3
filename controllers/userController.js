@@ -2,6 +2,8 @@ import User from "../models/userModel.js";
 import AppError from "../utils/errorUtils.js";
 import cloudinary from 'cloudinary';
 import fs from "fs/promises";
+import sendEmail from "../utils/sendEmail.js";
+import crypto from 'crypto';
 
 const cookieOption = {
     maxAge: 24 * 60 * 60 * 1000,
@@ -128,6 +130,78 @@ const logOut = async (req, res, next) => {
         success: true,
         message: "you logged out successfully"
     })
+};
+
+
+const forgotPassword = async (req, res, next) => {
+    const { email } = req.body;
+
+    if (!email){
+        return next(new AppError("Email ID is required", 401))
+    }
+    const user = await User.findOne({email});
+    if (!user){
+        return next(new AppError("User doesnot exists", 401))
+    }
+
+    const resetToken = await user.generatePasswordResetToken();
+
+    await user.save();
+
+    console.log(`resetToken: ${resetToken}`)
+
+    const resetPasswordURL = `${process.env.FRONTEND_URL}/resetPassword/${resetToken}`
+    console.log(resetPasswordURL);
+
+
+    const message = `You can reset password by clicking <a href=${resetPasswordURL} target="blank">Reset Your Password</a> if the above link doesnot work then copy & paste the link in new tab ${resetPasswordURL}`;
+    const subject = "Reset forgot Password"
+
+    try {
+        await sendEmail(email, message, subject);
+        res.status(200).json({
+            success: true,
+            message: `Reset Password token has been sent to ${email} successfullly`
+        })
+    } catch (e) {
+        user.forgotPasswordToken = undefined;
+        user.forgotPasswordExpiry = undefined;
+
+        await user.save()
+        return next(new AppError(e.message, 403))
+    }
+};
+
+const resetPassword = async (req, res, next) => {
+    const { resetToken } = req.params;
+    const { password } = req.body;
+
+    if(!password){
+        return next(new AppError("Please Enter the password to reset", 403))
+    };
+
+    const forgotPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    const user = await User.findOne({
+        forgotPasswordToken,
+        forgotPasswordExpiry: { $gt : Date.now() }
+    });
+
+    if(!user){
+        return next(new AppError("User doesnot exist. Please enter again", 403))
+    };
+
+    user.password = password;
+    user.forgotPasswordToken = undefined;
+    user.forgotPasswordExpiry = undefined;
+
+    await user.save();
+
+    res.status(201).json({
+        success: true,
+        message: "Password has reset successfully."
+    })
+
 
 }
 
@@ -137,5 +211,7 @@ export {
     register,
     login,
     getUserProfile,
-    logOut
+    logOut,
+    forgotPassword,
+    resetPassword
 }
